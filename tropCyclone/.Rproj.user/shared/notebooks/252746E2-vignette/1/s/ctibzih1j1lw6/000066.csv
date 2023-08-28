@@ -1,0 +1,45 @@
+"0","for (i in 1:length(storms)){
+  storm <- storms[i]
+  subset <- hurdat[hurdat$id == storm, ]
+  subset <- subset[subset$recordID != "" L"", ]
+  
+  #use our custom function to check landfall
+  landfall <- data.frame()
+  for (j in 1:nrow(subset)){
+    if (madeLandfallRow(subset[j, ])){
+      landfall <- rbind(landfall, subset[j, ])
+    }
+  }
+  
+  #now we can find the row of the max wind speed that made landfall
+  row <- landfall[landfall$maxWind == max(landfall$maxWind), ]
+  cat(""Plot for"", subset$name[1])
+  print(plotStorm(row))
+  cat(""Plot for"", subset$name[1])
+  print(plotStormTracks(storm))
+}
+"
+"1","Plot for"
+"1"," "
+"1","            KATRINA"
+"1","Plot for"
+"1"," "
+"1","            KATRINA"
+"1","Plot for"
+"1"," "
+"1","              SANDY"
+"1","Plot for"
+"1"," "
+"1","              SANDY"
+"1","Plot for"
+"1"," "
+"1","             HARVEY"
+"1","Plot for"
+"1"," "
+"1","             HARVEY"
+"1","Plot for"
+"1"," "
+"1","                IAN"
+"1","Plot for"
+"1"," "
+"1","                IAN"

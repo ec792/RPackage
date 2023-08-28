@@ -1,0 +1,8 @@
+"0","library(tropCyclone)"
+"0","library(randomcoloR)"
+"0","library(tidyverse)"
+"0","library(ggplot2)"
+"0","library(maps)"
+"0","library(sp)"
+"0","library(mapdata)"
+"0","data(""hurdat"")"

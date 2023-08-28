@@ -1,0 +1,9 @@
+"0","#numeric latitude and hemisphereNS
+hurdat <- cbind(hurdat[,1:6], 
+                as.numeric(substr(hurdat$latitude,1,5)), 
+                substr(hurdat$latitude,6,6),
+                hurdat[,8:23]) 
+"
+"2","Error in data.frame(..., check.names = FALSE) : 
+  arguments imply differing number of rows: 53972, 0
+"

@@ -1,0 +1,455 @@
+---
+title: "vignette"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{vignette}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 8,
+  fig.height = 5
+)
+```
+
+```{r setup}
+#install the package and all the library that is needed
+library(tropCyclone)
+library(randomcoloR)
+library(tidyverse)
+library(ggplot2)
+library(maps)
+library(sp)
+library(mapdata)
+data("hurdat")
+```
+
+**
+1. Plot the tracks of the storms in 2020, 2021, and 2022 in 3 separate plots. Your plots will be graded for how easy they are to decipher and how much information they display. Include, for example, some way to identify which storm each track belongs to.
+**
+
+```{r}
+# Question 1
+library(lubridate)
+
+#Plot 2020
+dat_2020 <- hurdat %>% 
+  mutate(Year = year(as.POSIXlt(hurdat$date, format = "%Y%m%d"))) %>% 
+  filter(Year == 2020)
+
+id_2020 <- dat_2020 %>% 
+  select(id)
+
+list_2020 <- unique(c(t(id_2020)))
+
+plotStormTracks(list_2020)
+
+#Plot 2021
+dat_2021 <- hurdat %>% 
+  mutate(Year = year(as.POSIXlt(hurdat$date, format = "%Y%m%d"))) %>% 
+  filter(Year == 2021)
+
+id_2021 <- dat_2021 %>% 
+  select(id)
+
+list_2021 <- unique(c(t(id_2021)))
+
+plotStormTracks(list_2021)
+
+
+#Plot 2022
+dat_2022 <- hurdat %>% 
+  mutate(Year = year(as.POSIXlt(hurdat$date, format = "%Y%m%d"))) %>% 
+  filter(Year == 2022)
+
+id_2022 <- dat_2022 %>% 
+  select(id)
+
+list_2022 <- unique(c(t(id_2022)))
+
+plotStormTracks(list_2022)
+```
+
+**
+2. Plot the position and size of hurricanes Katrina (2005), Sandy (2012), Harvey (2017), and Ian (2022) when they made landfall. If there are multiple landfalls, pick the strongest landfall that occurred in the US. Include the storm tracks in your plot if you can. You can put this all on one plot if it’s not too messy.
+**
+
+```{r}
+#create another function madeLandfall (our package one only takes in stormID), we can change
+#to check for each row
+madeLandfallRow <- function(row){
+  #this function will take in a hurricane id, subset it from the best track dataset
+  #then use the us boundaries (main) given by maps and the sp package
+  #to see if the points are in the polygon made by the points of the boundaries
+  us <- map_data("usa")
+
+  latNS <- ifelse(row$hemisphereNS == "N", 1, -1)
+  longWE <- ifelse(row$hemisphereWE == "E", 1, -1)
+
+  #use the boundaries and point in polygon to see if it made landfall
+  ans <- sum(point.in.polygon(row$longitude * longWE, row$latitude * latNS, us$long, us$lat))
+  if (ans > 0){
+    return(TRUE)
+  }
+  return(FALSE)
+}
+
+#create a storm vector of all the storms id
+storms <- c("AL122005", "AL182012", "AL092017", "AL092022")
+
+for (i in 1:length(storms)){
+  storm <- storms[i]
+  subset <- hurdat[hurdat$id == storm, ]
+  subset <- subset[subset$recordID != " L", ]
+  
+  #use our custom function to check landfall
+  landfall <- data.frame()
+  for (j in 1:nrow(subset)){
+    if (madeLandfallRow(subset[j, ])){
+      landfall <- rbind(landfall, subset[j, ])
+    }
+  }
+  
+  #now we can find the row of the max wind speed that made landfall
+  row <- landfall[landfall$maxWind == max(landfall$maxWind), ]
+  cat("Landfall Graph for", subset$name[1])
+  print(plotStorm(row))
+  cat("Storm Track for", subset$name[1])
+  print(plotStormTracks(storm))
+}
+```
+
+**
+3. Create a dataframe that has one row for each individual storm, with the following columns:
+• storm id
+• storm name
+• maximum wind speed
+• minimum pressure
+• indicator for whether it made landfall or not 
+• accumulated cyclone energy
+**
+
+```{r}
+stormData <- data.frame()
+
+ids <- unique(hurdat$id)
+
+for (i in 1:length(ids)){
+  subset <- hurdat[hurdat$id == ids[i], ]
+  row <- c(subset$id[1], 
+           subset$name[1], 
+           max(subset$maxWind), 
+           min(subset$minPressure),
+           madeLandfall(ids[i]),
+           getEnergy(ids[i]))
+  stormData <- rbind(stormData, row)
+}
+
+names(stormData) <- c("id", "name", "maxWind", "minPressure", "madeLandfall", "ACE")
+head(stormData)
+```
+
+**
+4. Include two additional plots exploring interesting things you found in the dataset.
+**
+
+```{r}
+library(lubridate)
+
+head(month(hurdat$Date))
+
+hurdat_2 <- hurdat
+hurdat_2$date <- as.POSIXct(hurdat_2$date, format = "%Y%m%d")
+
+#Looking at tropical cyclone occurrence by month
+unique_storms <- hurdat_2 %>% 
+  select(id, date) %>% 
+  mutate(Year = year(hurdat_2$date)) %>% 
+  select(id, Year) %>% 
+  unique() %>% 
+  group_by(Year) %>% 
+  count()
+
+by_month_df <- hurdat_2 %>% 
+  select(id, date) %>% 
+  mutate(Month = month(hurdat_2$date)) %>% 
+  select(id, Month) %>% 
+  unique() %>% 
+  group_by(Month) %>% 
+  count() 
+
+by_month_df %>% 
+  mutate(Month = as.factor(Month)) %>% 
+  ggplot(aes(x = Month, y = n)) +
+  geom_col(fill = "cadetblue3") +
+  ggtitle("Tropical Cyclone Data by Month") +
+  labs(x = "Month", y = "Count")
+
+#' We are surprised that tropical cyclone occurrence is so much larger in September. 
+#' We usually think of hurricanes and tropical storms as most likely 
+#' in the summer, so we were surprised that September was most common by far.
+
+ 
+#Comparing mean radius of maximum wind by status of system. 
+hurdat_2 %>% 
+  filter(!is.na(radius)) %>% 
+  group_by(status) %>% 
+  summarize(radius = mean(radius)) %>% 
+  ggplot(aes(x = status, y = radius)) +
+  geom_col(fill = "dodgerblue") +
+  ggtitle("Mean Radius of Maximum Wind by Status of System") +
+  labs(x = "Status of System", y = "Mean Radius of Maximum Wind (In Nautical Miles") +
+  guides(fill = "none")
+
+#' We were interested in comparing mean radius of maximum wind by status of system. 
+#' Hurricanes are much larger scale events than tropical storms or disturbances, 
+#' so we assumed that they would have larger radii of maximum wind, causing more destruction. 
+#' However, it turns out, their mean radii of maximum wind is much
+#' smaller than that of other types of storms. Their damage is likely 
+#' very strong in a much smaller area. 
+```
+**
+5. Is the number of landfalling hurricanes increasing over time? Define specifically what this question means to you, and do an appropriate statistical analysis to try to answer the question using the hurdat data. This involves writing down a statistical model, identifying parameters of interest, estimating them, and doing inference on them.
+**
+
+This question means to us the following: Is the proportion of hurricanes (HU – Tropical cyclone of hurricane intensity (> 64 knots)) which make landfall increasing over time?
+
+First, we will rearrange our dataset and add the relevant information.
+```{r}
+hurdat_2 <- hurdat
+hurdat_2$date <- as.POSIXct(hurdat_2$date, format = "%Y%m%d")
+
+HU_only <- hurdat_2 %>% 
+  filter(status == " HU")
+
+HU_only <- HU_only %>% 
+  select(id, date) %>% 
+  mutate(Year = year(date)) %>% 
+  select(id, Year) %>% 
+  unique()
+
+HU_only$Landfall <- 0
+
+for(i in 1:nrow(HU_only)){
+  n <- madeLandfall(HU_only$id[i])
+  HU_only$Landfall[i] <- n
+}
+
+# 1 = made landfall, 0 = did not make landfall
+HU_only <- HU_only %>% 
+  mutate(Decade = 0) %>% 
+  mutate(Decade = ifelse(Year <= 1859, "1850s", Decade)) %>% 
+  mutate(Decade = ifelse(Year >= 1860 & Year <= 1869, "1860s", Decade)) %>% 
+  mutate(Decade = ifelse(Year >= 1870 & Year <= 1879, "1870s", Decade)) %>%
+  mutate(Decade = ifelse(Year >= 1880 & Year <= 1889, "1880s", Decade)) %>%
+  mutate(Decade = ifelse(Year >= 1890 & Year <= 1899, "1890s", Decade)) %>%
+  mutate(Decade = ifelse(Year >= 1900 & Year <= 1909, "1900s", Decade)) %>%
+  mutate(Decade = ifelse(Year >= 1910 & Year <= 1919, "1910s", Decade)) %>%
+  mutate(Decade = ifelse(Year >= 1920 & Year <= 1929, "1920s", Decade)) %>%
+  mutate(Decade = ifelse(Year >= 1930 & Year <= 1939, "1930s", Decade)) %>%
+  mutate(Decade = ifelse(Year >= 1940 & Year <= 1949, "1940s", Decade)) %>%
+  mutate(Decade = ifelse(Year >= 1950 & Year <= 1959, "1950s", Decade)) %>%
+  mutate(Decade = ifelse(Year >= 1960 & Year <= 1969, "1960s", Decade)) %>%
+  mutate(Decade = ifelse(Year >= 1970 & Year <= 1979, "1970s", Decade)) %>%
+  mutate(Decade = ifelse(Year >= 1980 & Year <= 1989, "1980s", Decade)) %>%
+  mutate(Decade = ifelse(Year >= 1990 & Year <= 1999, "1990s", Decade)) %>%
+  mutate(Decade = ifelse(Year >= 2000 & Year <= 2009, "2000s", Decade)) %>%
+  mutate(Decade = ifelse(Year >= 2010 & Year <= 2019, "2010s", Decade)) %>%
+  mutate(Decade = ifelse(Year >= 2020 & Year <= 2029, "2020s", Decade))
+```
+
+Before creating the model, we will do descriptive analysis and create a plot which looks at the proportion of hurricanes which made landfall by decade
+```{r}
+HU_only %>% 
+  group_by(Decade) %>% 
+  summarize(Proportion = mean(Landfall)) %>% 
+  ggplot(aes(x = Decade, y = Proportion)) +
+  geom_col(fill = "dodgerblue") +
+  labs(x = "Decade", y = "Proportion of Hurricanes Which Made Landfall") +
+  ggtitle("Proportion of Hurricanes Which Made Landfall by Decade")
+```
+
+The plot shows that the proportion of hurricanes which are making landfall does not appear to be increasing. 
+
+Now, we will create a logistic model, using year as the independent variable, with landfall (binary outcome) as our dependent variable.
+
+To conduct logistic regression, we must assume that the outcome is binary, observations are independent of each other, the predictor variables are not linear combinations of one another, and the relationship between logit[$\pi$(x)] and parameters is linear. We believe these are reasonable assumptions. Our model will be of the general form: logit($\pi$(Landfall)) = $\beta_0$ +  $\beta_1$(Year). Our quantity of primary interest is $\beta_1$. 
+
+```{r}
+model_5 <- glm(HU_only$Landfall ~ HU_only$Year, family = binomial)
+summary(model_5)
+```
+
+Our model: logit($\pi$(Landfall)) = 6.969123 - 0.003909(Year)
+
+In our model, we have a statistically significant negative coefficient for $\beta_1$, using an alpha level of .05 (p = 0.00346). The negative sign on the coefficient indicates that as years increase and time has progressed, the proportion of hurricanes which are making landfall is decreasing. For each year, the proportion of hurricanes which are making landfall is decreasing on average by 0.003909 (0.3909%).
+
+**
+6. Is the intensity of tropical cyclones increasing over time? Define specifically what this question means to you, and do an appropriate statistical analysis to try to answer the question using the hurdat data. This involves writing down a statistical model, identifying parameters of interest, estimating them, and doing inference on them.
+**
+
+- There are three types of tropical cyclones identified in the hurdat dataset:
+
+TD – Tropical cyclone of tropical depression intensity (< 34 knots)
+TS – Tropical cyclone of tropical storm intensity (34-63 knots)
+HU – Tropical cyclone of hurricane intensity (> 64 knots)
+
+- This questions means to us the following: Are the odds of more intense tropical storms (TS and HU) increasing over time?
+
+- To determine if the intensity of tropical cyclones is increasing over time, we will run a multinomial logistic regression model, using "TD" (lowest intensity) as our reference cell. Our dependent variable will be type of tropical cyclone (TD vs TS vs HU), and our independent variable will be year. 
+
+- To conduct multinomial logistic regression, we must assume that the outcome categories are mutually exclusive and exhaustive, observations are independent of each other, the predictor variables are not linear combinations of one another, and the relationship between logit[$\pi$(x)] and parameters is linear. We believe these are reasonable assumptions. Our model will be of the general form:
+
+ln(($\pi_{HU}$)/($\pi_{TD}$)) = $\alpha_{HU}$ + $\beta_{YearHU}$(Year) 
+
+ln(($\pi_{TS}$)/($\pi_{TD}$)) = $\alpha_{TS}$ + $\beta_{YearTS}$(Year) 
+
+Our quantities of primary interest are $\beta_{YearHU}$ and $\beta_{YearTS}$.
+
+```{r}
+library(lubridate)
+library(tidyverse)
+library(nnet)
+
+hurdat_2 <- hurdat
+hurdat_2$date <- as.POSIXct(hurdat_2$date, format = "%Y%m%d")
+
+# Filtering the data
+trop_storm <- hurdat_2 %>% 
+  filter(status == " TD" | status == " TS" | status == " HU")
+
+# Getting new data frame with storm id, status, and year
+trop_storm <- trop_storm %>% 
+  select(id, status, date) %>% 
+  mutate(Year = year(date)) %>% 
+  select(id, status, Year) %>% 
+  unique()
+
+# Make TD the reference cell
+trop_storm$status <- relevel(factor(trop_storm$status), ref = " TD")
+
+# Make the multinomial logistic regression model
+model_6 <- multinom(trop_storm$status ~ trop_storm$Year)
+summary(model_6)
+```
+
+Here is our fitted model:
+
+ln(($\pi_{HU}$)/($\pi_{TD}$)) = 23.89871 - 0.012407097(Year) 
+
+ln(($\pi_{TS}$)/($\pi_{TD}$)) = 17.84278 -  0.009019746(Year) 
+
+Interpretation:
+
+exp(-0.012407097) = 0.9876696
+
+- For every one year increase, the odds of HU – Tropical cyclone of hurricane intensity (> 64 knots) over TD – Tropical cyclone of tropical depression intensity (< 34 knots) decrease by 1.24 percent
+
+exp(-0.009019746) = 0.9910208
+
+- For every one year increase, the odds of TS – Tropical cyclone of tropical storm intensity (34-63 knots) over TD – Tropical cyclone of tropical depression intensity (< 34 knots) decrease by 0.90 percent
+
+- This suggests that the intensity of tropical cyclones is decreasing over time.
+
+- Now we will test the effect of year using a likelihood ratio test. 
+
+- Ho: Year is not a significant predictor for intensity of tropical cyclone
+
+- Ha: Year is a significant predictor for intensity of tropical cyclone
+
+
+```{r}
+#Likelihood Ratio Test
+#Reduced Model
+library(lmtest)
+reduced_model <- multinom(trop_storm$status ~ 1)
+
+summary(reduced_model)
+
+lrtest(model_6, reduced_model)
+```
+
+- Since p < .05, we reject the null hypothesis at alpha = .05. There is sufficient evidence to suggest that year is a significant predictor for intensity of tropical cyclone.
+
+- We conclude that the intensity of tropical cyclones is decreasing over time.
+
+**
+7. Find a claim made in the media made about tropical cyclones and climate change, and check whether the claim is supported or not by your data. You should pick a claim for which your data has relevant information. Cite the media source. For fun, you can also report what ChatGPT has to say about the claim.
+**
+
+```{r}
+#' Find a claim made in the media made about tropical cyclones and climate change, and check 
+#' whether the claim is supported or not by your data. You should pick a claim for which 
+#' your data has relevant information. Cite the media source. For fun, you can also report 
+#' what ChatGPT has to say about the claim.
+#' 
+#' Media Source: https://www.abc.net.au/news/2022-06-28/cyclone-frequency-decline-worldwide-climate-change/101189558
+#' Claim: "Tropical cyclones are occurring less frequently around the world due to climate change, Australian
+#' scientists have found.
+#' 
+#' ChatGPT: Question: Are tropical cyclones happening less frequently due to climate change?
+#' Answer: The relationship between climate change and tropical cyclones is a complex and active area
+#' of research, and there is currently no consensus on whether tropical cyclones are happening less 
+#' frequently due to climate change.
+#' 
+#' 
+#' We will look to see if the frequency of tropical cyclones has decreased in our dataset (Atlantic Hurricane Database)
+
+#Loading necessary packages
+library(tidyverse)
+library(lubridate)
+
+hurdat_2 <- hurdat
+hurdat_2$date <- as.POSIXct(hurdat_2$date, format = "%Y%m%d")
+
+#Grouping the data
+unique_storms <- hurdat_2 %>% 
+  select(id, date) %>% 
+  mutate(Year = year(hurdat_2$date)) %>% 
+  select(id, Year) %>% 
+  unique() %>% 
+  group_by(Year) %>% 
+  count()
+
+decades <- c("1850s", "1860s", "1870s", "1880s", "1890s",
+             "1900s", "1910s", "1920s", "1930s", "1940s",
+             "1950s", "1960s", "1970s", "1980s", "1990s",
+             "2000s", "2010s", "2020s")
+
+cyclone_count <- c(sum(unique_storms$n[1:9]),
+                   sum(unique_storms$n[10:19]),
+                   sum(unique_storms$n[20:29]),
+                   sum(unique_storms$n[30:39]),
+                   sum(unique_storms$n[40:49]),
+                   sum(unique_storms$n[50:59]),
+                   sum(unique_storms$n[60:69]),
+                   sum(unique_storms$n[70:79]),
+                   sum(unique_storms$n[80:89]),
+                   sum(unique_storms$n[90:99]),
+                   sum(unique_storms$n[100:109]),
+                   sum(unique_storms$n[110:119]),
+                   sum(unique_storms$n[120:129]),
+                   sum(unique_storms$n[130:139]),
+                   sum(unique_storms$n[140:149]),
+                   sum(unique_storms$n[150:159]),
+                   sum(unique_storms$n[160:169]),
+                   sum(unique_storms$n[170:172]))
+
+new_df_7 <- data.frame(decades, cyclone_count)
+
+new_df_7 %>% 
+  ggplot(aes(x = decades, y = cyclone_count)) +
+  geom_col(fill = "Orange") +
+  labs(x = "Decade", y = "Count of Cyclone Occurrence") +
+  theme(axis.text.x = element_text(size = 8)) +
+  ggtitle("Tropical Cyclone Data by Decade")
+
+#' The plot above shows that tropical cyclone occurrence (at least in the Atlantic Hurricane
+#'  Database) does not seem to be decreasing, disputing the article's claims. 
+#'  Perhaps other areas of the world are accounting for a greater share of the 
+#'  article's claimed "decline" in tropical storms.
+```
